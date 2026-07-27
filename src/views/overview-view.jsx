@@ -19,7 +19,7 @@ function prettyProject(name) {
   if (!name) return name;
   let m = name.match(/^([^-]+)-([A-Za-z])--(.+)$/); // host + drive path
   if (m) return `${m[1]} ${m[2]}:/${m[3].replace(/-/g, '/')}`;
-  m = name.match(/^([^-]+)-(-.+)$/);                 // host + unix path
+  m = name.match(/^([^-]+)-(-.*)$/);                 // host + unix path
   if (m) return `${m[1]} ${m[2].replace(/-/g, '/')}`;
   m = name.match(/^([A-Za-z])--(.+)$/);              // bare drive path
   if (m) return `${m[1]}:/${m[2].replace(/-/g, '/')}`;
@@ -71,14 +71,22 @@ function DailyBars({ daily }) {
 
   if (!days.length) return <div className="ov-empty">no usage in range</div>;
 
-  const H = 220, padL = 46, padR = 10, padT = 18, padB = 26;
-  const plotW = Math.max(50, w - padL - padR);
-  const plotH = H - padT - padB;
+  const H = 220, padR = 10, padT = 18, padB = 26;
   const max = Math.max(...days.map(d => d.cost), 0.01);
   const maxIdx = days.reduce((mi, d, i) => (d.cost > days[mi].cost ? i : mi), 0);
+  // Grid at round values (largest nice step <= max/2), not at raw
+  // fractions of max — "$250" reads, "$299.43" doesn't.
+  const rawStep = max / 2;
+  const pow = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const step = [10, 5, 2.5, 2, 1].map(m => m * pow).find(s => s <= rawStep) || rawStep;
+  const yTicks = [];
+  for (let v = 0; v <= max * 1.0001; v += step) yTicks.push(v);
+  const tickLabel = v => window.humanFmt(v, true);
+  const padL = 14 + Math.max(...yTicks.map(v => tickLabel(v).length)) * 6.6;
+  const plotW = Math.max(50, w - padL - padR);
+  const plotH = H - padT - padB;
   const bw = plotW / days.length;
   const barW = Math.max(2, Math.min(38, bw - 2));
-  const yTicks = [0, 0.5, 1].map(f => f * max);
   const labelEvery = Math.max(1, Math.ceil(days.length / 8));
 
   const x = i => padL + i * bw + (bw - barW) / 2;
@@ -92,7 +100,7 @@ function DailyBars({ daily }) {
             <line x1={padL} x2={w - padR} y1={y(v)} y2={y(v)}
               stroke="var(--border)" strokeWidth="1" />
             <text x={padL - 8} y={y(v) + 4} textAnchor="end" className="ov-tick">
-              {window.humanFmt(v, true)}
+              {tickLabel(v)}
             </text>
           </g>
         ))}

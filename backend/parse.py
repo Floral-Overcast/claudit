@@ -140,6 +140,7 @@ def parse_file(file_key: str, blob: bytes) -> dict:
     user_text_lines: list[int] = []
     rate_limit_hits: list[dict] = []
     tool_uses: list[dict] = []
+    seen_tool_ids: set[str] = set()
     # Per-file map of assistant tool_use.id -> bool(is_error).
     # Populated from later user tool_result blocks; consumed after
     # the line walk to fill tool_uses[*]["is_error"].
@@ -368,21 +369,28 @@ def parse_file(file_key: str, blob: bytes) -> dict:
             if req_id:
                 seen_request[req_id] = ev
             records_in_order.append(ev)
-            # Tool calls: record only on the FIRST occurrence of a
-            # requestId — streaming dupes carry the same tool_use blocks
-            # and shouldn't be double-counted. Captured with the line's
-            # ts so the tool-ratio panel can bucket by time.
-            for tu in msg_tool_uses:
-                tool_uses.append({
-                    "file_key": file_key,
-                    "line_num": line_num,
-                    "idx": tu["idx"],
-                    "ts": _to_dt(obj.get("timestamp", "") or ""),
-                    "tool_name": tu["tool_name"],
-                    "tool_use_id": tu["tool_use_id"],
-                    "target_path": tu.get("target_path", ""),
-                    "is_error": None,  # filled after the line walk
-                })
+        # Tool calls: dedupe on tool_use.id, NOT on first-line-of-request.
+        # Claude Code writes one JSONL line per content block, so a turn's
+        # tool_use blocks land on LATER lines of the same requestId — the
+        # old first-occurrence rule dropped every one of those (measured
+        # 149 real calls -> 44 recorded on a hub transcript). The block id
+        # is globally unique, so it both kills streaming dupes and keeps
+        # every distinct call; idless blocks fall back to (req, line, idx).
+        for tu in msg_tool_uses:
+            tu_key = tu["tool_use_id"] or f"{req_id}:{line_num}:{tu['idx']}"
+            if tu_key in seen_tool_ids:
+                continue
+            seen_tool_ids.add(tu_key)
+            tool_uses.append({
+                "file_key": file_key,
+                "line_num": line_num,
+                "idx": tu["idx"],
+                "ts": _to_dt(obj.get("timestamp", "") or ""),
+                "tool_name": tu["tool_name"],
+                "tool_use_id": tu["tool_use_id"],
+                "target_path": tu.get("target_path", ""),
+                "is_error": None,  # filled after the line walk
+            })
 
     # Resolve tool_result.is_error onto each tool_uses entry by
     # tool_use_id. Unmatched entries keep is_error=None and are
