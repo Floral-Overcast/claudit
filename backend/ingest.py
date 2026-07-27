@@ -708,8 +708,8 @@ def _persist(obj, proj, project_id, session_id, is_main, parsed,
         if parsed.get("tool_uses"):
             cur.executemany(
                 """
-                INSERT INTO tool_uses (file_key, line_num, idx, ts, tool_name, is_error)
-                VALUES (%(file_key)s, %(line_num)s, %(idx)s, %(ts)s, %(tool_name)s, %(is_error)s)
+                INSERT INTO tool_uses (file_key, line_num, idx, ts, tool_name, target_path, is_error)
+                VALUES (%(file_key)s, %(line_num)s, %(idx)s, %(ts)s, %(tool_name)s, %(target_path)s, %(is_error)s)
                 """,
                 parsed["tool_uses"],
             )

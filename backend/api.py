@@ -1923,3 +1923,154 @@ def session_detail(session_id: str) -> dict:
         "ctx_trace": ctx_trace,
         "burn": burn,
     }
+
+
+@router.get("/overview")
+@cache_response
+def overview(
+    range: str = Query("30d"),
+    project: str | None = Query(None),
+) -> dict:
+    """One-screen summary for the default Overview tab: window totals,
+    per-prompt averages, per-day cost, and cost by model.
+
+    Everything except the tool counts reads pre-aggregated tables
+    (usage_rollup / files); tool counts scan tool_uses via its ts index.
+    "Memory reads" are Read/Grep/Glob calls whose target_path contains
+    OVERVIEW_MEMORY_PATTERN (default "/memory/") — target_path is filled
+    at parse time, so rows ingested before that column existed count 0
+    until a PARSER_VERSION bump triggers a reparse.
+
+    Per-day buckets truncate in the connection's TimeZone (the server's
+    local day), matching how a person reads "what did today cost".
+    """
+    delta = _parse_range(range)
+    since = datetime.now(timezone.utc) - delta
+    memory_pat = os.environ.get("OVERVIEW_MEMORY_PATTERN", "/memory/")
+
+    proj_u = "AND u.project_id = %s" if project else ""
+    proj_f = "AND f.project_id = %s" if project else ""
+    args_u: list[Any] = [since] + ([project] if project else [])
+    args_f: list[Any] = [since] + ([project] if project else [])
+
+    with db.viz_conn() as c:
+        totals = c.execute(
+            f"""
+            SELECT COALESCE(SUM(u.cost_usd), 0)              AS cost,
+                   COALESCE(SUM(u.fresh_tokens), 0)          AS input_tokens,
+                   COALESCE(SUM(u.output_tokens), 0)         AS output_tokens,
+                   COALESCE(SUM(u.cache_creation_tokens), 0) AS cache_create,
+                   COALESCE(SUM(u.cache_read_tokens), 0)     AS cache_read,
+                   COALESCE(SUM(u.requests), 0)              AS requests,
+                   COUNT(DISTINCT u.session_id) FILTER (WHERE u.is_main)
+                                                             AS sessions
+            FROM usage_rollup u
+            WHERE u.hour >= date_trunc('hour', %s::timestamptz) {proj_u}
+            """,
+            args_u,
+        ).fetchone()
+
+        prompts_row = c.execute(
+            f"""
+            SELECT COALESCE(SUM(f.prompt_count), 0),
+                   COALESCE(SUM(f.turn_count), 0)
+            FROM files f
+            WHERE f.r2_last_modified >= %s {proj_f}
+            """,
+            args_f,
+        ).fetchone()
+
+        daily = c.execute(
+            f"""
+            SELECT date_trunc('day', u.hour) AS day,
+                   SUM(u.cost_usd)           AS cost,
+                   SUM(u.output_tokens)      AS output_tokens
+            FROM usage_rollup u
+            WHERE u.hour >= date_trunc('hour', %s::timestamptz) {proj_u}
+            GROUP BY 1 ORDER BY 1
+            """,
+            args_u,
+        ).fetchall()
+
+        by_model = c.execute(
+            f"""
+            SELECT u.model,
+                   SUM(u.cost_usd)      AS cost,
+                   SUM(u.output_tokens) AS output_tokens
+            FROM usage_rollup u
+            WHERE u.hour >= date_trunc('hour', %s::timestamptz) {proj_u}
+            GROUP BY 1 HAVING SUM(u.cost_usd) > 0
+            ORDER BY cost DESC
+            """,
+            args_u,
+        ).fetchall()
+
+        tool_args: list[Any] = [f"%{memory_pat}%", since]
+        if project:
+            tool_args.append(project)
+        tools = c.execute(
+            f"""
+            SELECT COUNT(*) AS tool_calls,
+                   COUNT(*) FILTER (WHERE tu.tool_name = 'Read')
+                       AS file_reads,
+                   COUNT(*) FILTER (
+                     WHERE tu.tool_name IN ('Read', 'Grep', 'Glob')
+                       AND tu.target_path LIKE %s
+                   ) AS memory_reads
+            FROM tool_uses tu
+            JOIN files f ON f.file_key = tu.file_key
+            WHERE tu.ts >= %s {proj_f}
+            """,
+            tool_args,
+        ).fetchone()
+
+    cost = float(totals[0] or 0)
+    output_tokens = int(totals[2] or 0)
+    prompts = int(prompts_row[0] or 0)
+    turns = int(prompts_row[1] or 0)
+    tool_calls = int(tools[0] or 0)
+    file_reads = int(tools[1] or 0)
+    memory_reads = int(tools[2] or 0)
+    denom = max(prompts, 1)
+
+    return {
+        "range": range,
+        "project": project,
+        "totals": {
+            "cost_usd": cost,
+            "input_tokens": int(totals[1] or 0),
+            "output_tokens": output_tokens,
+            "cache_create_tokens": int(totals[3] or 0),
+            "cache_read_tokens": int(totals[4] or 0),
+            "requests": int(totals[5] or 0),
+            "sessions": int(totals[6] or 0),
+            "prompts": prompts,
+            "turns": turns,
+            "tool_calls": tool_calls,
+            "file_reads": file_reads,
+            "memory_reads": memory_reads,
+        },
+        "per_prompt": {
+            "cost_usd": cost / denom,
+            "output_tokens": output_tokens / denom,
+            "tool_calls": tool_calls / denom,
+            "file_reads": file_reads / denom,
+            "memory_reads": memory_reads / denom,
+        },
+        "daily": [
+            {
+                "day": _iso(d),
+                "cost_usd": float(cst or 0),
+                "output_tokens": int(ot or 0),
+            }
+            for (d, cst, ot) in daily
+        ],
+        "cost_by_model": [
+            {
+                "model": m,
+                "cost_usd": float(cst or 0),
+                "output_tokens": int(ot or 0),
+            }
+            for (m, cst, ot) in by_model
+        ],
+    }

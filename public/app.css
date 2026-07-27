@@ -17,8 +17,11 @@
   /* text */
   --fg:        #e7e9f2;
   --fg-2:      #b9bdd0;
-  --muted:     #6b7193;
-  --muted-2:   #4a4f6a;
+  /* De-emphasis comes from the desaturated blue hue, not from dropping
+     lightness below readable: #6b7193 on the card surface was ~4.2:1 at
+     10px uppercase — under the 4.5:1 small-text floor. */
+  --muted:     #8f95b8;
+  --muted-2:   #626890;
 
   /* accents — keep teal, add hue-locked siblings for chart use */
   --accent:        #00d4aa;
@@ -185,7 +188,7 @@ a.loadbtn { display: inline-block; text-decoration: none; }
 .stat { padding: 12px 16px; min-width: 0; }
 .stat-label {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -637,3 +640,98 @@ button:focus-visible, .navbtn:focus-visible, .chip:focus-visible, .fchip:focus-v
     max-height: 45vh;
   }
 }
+
+/* ── Overview tab ─────────────────────────────────────────────── */
+
+.ov-wrap {
+  max-width: 1500px; width: 100%;
+  margin: 0 auto; padding: 20px 22px 32px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.ov-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.ov-stat {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+.ov-stat-label {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.ov-stat-value {
+  font-family: var(--mono); font-size: 30px; font-weight: 600;
+  color: var(--fg); line-height: 1.05; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ov-stat-hl .ov-stat-value { color: var(--gold); }
+.ov-stat-sub {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--muted); margin-top: 6px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.ov-pp .ov-stat { border: none; box-shadow: none; padding: 8px 12px; background: transparent; }
+.ov-pp .ov-stat-value { font-size: 24px; }
+
+.ov-row-main {
+  display: grid; grid-template-columns: 2fr 1fr; gap: 16px;
+  align-items: stretch;
+}
+.ov-row-second {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 1100px) {
+  .ov-stats { grid-template-columns: repeat(2, 1fr); }
+  .ov-row-main, .ov-row-second { grid-template-columns: 1fr; }
+}
+
+.ov-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+/* HBar draws its own card chrome; the flush variant just constrains it */
+.ov-card-flush { padding: 0; background: transparent; border: none; box-shadow: none; }
+.ov-card-title {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  color: var(--fg-2); letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+.ov-card-note {
+  font-weight: 400; color: var(--muted); text-transform: none; letter-spacing: 0;
+  margin-left: 8px; font-size: 11px;
+}
+.ov-pp {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
+}
+@media (max-width: 1100px) { .ov-pp { grid-template-columns: repeat(2, 1fr); } }
+
+.ov-chart { position: relative; }
+.ov-tick { fill: var(--muted); font-family: var(--mono); font-size: 10px; }
+.ov-peak { fill: var(--fg-2); font-family: var(--mono); font-size: 11px; }
+.ov-empty {
+  color: var(--muted); font-family: var(--mono); font-size: 12px;
+  padding: 30px; text-align: center;
+}
+.ov-tip {
+  position: absolute; pointer-events: none;
+  background: var(--panel-2); border: 1px solid var(--border-2);
+  border-radius: var(--r-sm); padding: 6px 9px;
+  font-family: var(--mono); font-size: 11px; white-space: nowrap;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  z-index: 10;
+}
+.ov-tip-date { color: var(--muted); margin-bottom: 2px; }
+.ov-tip-val  { color: var(--fg); font-size: 13px; font-weight: 600; }

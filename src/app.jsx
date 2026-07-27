@@ -115,7 +115,7 @@ function txToDashData(tx) {
 }
 
 function App() {
-  const [route, setRoute] = useState('dashboard'); // dashboard | sessions | session
+  const [route, setRoute] = useState('overview'); // overview | dashboard | sessions | session
   const [tx, setTx] = useState(null); // parsed transcript {events, meta, stats}
   const [, setFilename] = useState('');
   const [synth, setSynth] = useState(null);
@@ -245,6 +245,14 @@ function App() {
           Dashboard hosts four self-fetching panels whose requests must go
           out in parallel with /api/dashboard. It renders a loading summary
           until `synth` arrives. */}
+      {route === 'overview' && (
+        <window.OverviewView
+          project={activeProject}
+          range={activeRange}
+          nonce={dashNonce}
+          projects={projects}
+          isGuest={isGuest} />
+      )}
       {route === 'dashboard' && (dashData || backendOn) && <Dashboard synth={dashData} models={models} backendOn={backendOn} activeProject={activeProject} activeRange={activeRange} dashNonce={dashNonce} />}
       {route === 'sessions' && dashData && (
         <SessionsList
@@ -366,8 +374,8 @@ function ProjectPicker({ projects, active, onChange }) {
           key={p.project_id}
           className={'pp-btn ' + (active === p.project_id ? 'on' : '')}
           onClick={() => onChange(p.project_id)}
-          title={`${p.session_count} sessions · $${p.total_cost.toFixed(2)}`}
-        >{p.display_name}</button>
+          title={`${p.project_id} · ${p.session_count} sessions · $${p.total_cost.toFixed(2)}`}
+        >{window.prettyProject ? window.prettyProject(p.display_name) : p.display_name}</button>
       ))}
       {pageCount > 1 && (
         <span className="pp-pager">
@@ -497,7 +505,8 @@ function TopBar({ route, setRoute, isGuest, backendOn, range, project }) {
         </div>
       </div>
       <nav className="topnav">
-        <button className={'navbtn ' + (route === 'dashboard' ? 'on' : '')} onClick={() => setRoute('dashboard')}>Overview</button>
+        <button className={'navbtn ' + (route === 'overview' ? 'on' : '')} onClick={() => setRoute('overview')}>Overview</button>
+        <button className={'navbtn ' + (route === 'dashboard' ? 'on' : '')} onClick={() => setRoute('dashboard')}>Analytics</button>
         {!isGuest && (
           <button className={'navbtn ' + (route === 'sessions' ? 'on' : '')} onClick={() => setRoute('sessions')}>Sessions</button>
         )}

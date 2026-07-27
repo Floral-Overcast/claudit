@@ -201,6 +201,14 @@ CREATE INDEX IF NOT EXISTS tool_uses_tool_idx ON tool_uses (tool_name);
 -- the error rate over settled calls only.
 ALTER TABLE tool_uses ADD COLUMN IF NOT EXISTS is_error BOOLEAN;
 
+-- Primary file-ish target of the call ('' when the input has none).
+-- Filled at parse time from tool_use input.file_path / notebook_path /
+-- path; lets /api/overview break read activity down by path prefix
+-- (e.g. "memory reads") without storing full input payloads. Requires a
+-- PARSER_VERSION bump to backfill existing rows.
+ALTER TABLE tool_uses ADD COLUMN IF NOT EXISTS
+  target_path TEXT NOT NULL DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS ingest_runs (
   id              BIGSERIAL PRIMARY KEY,
   started_at      TIMESTAMPTZ NOT NULL,

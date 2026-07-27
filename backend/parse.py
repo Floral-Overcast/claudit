@@ -305,10 +305,25 @@ def parse_file(file_key: str, blob: bytes) -> dict:
                     # both as tool calls in the panel.
                     name = str(blk.get("name", "") or "")
                     if name:
+                        # Primary file-ish target of the call, when the
+                        # input has one (Read/Edit/Write/NotebookEdit).
+                        # Lets read activity be broken down by path
+                        # prefix (e.g. memory reads) without storing the
+                        # full input payload.
+                        tin = blk.get("input")
+                        target = ""
+                        if isinstance(tin, dict):
+                            target = str(
+                                tin.get("file_path")
+                                or tin.get("notebook_path")
+                                or tin.get("path")
+                                or ""
+                            )[:512]
                         msg_tool_uses.append({
                             "idx": idx,
                             "tool_name": name,
                             "tool_use_id": str(blk.get("id", "") or ""),
+                            "target_path": target,
                         })
         elif isinstance(msg_content, str):
             text_chars = len(msg_content)
@@ -365,6 +380,7 @@ def parse_file(file_key: str, blob: bytes) -> dict:
                     "ts": _to_dt(obj.get("timestamp", "") or ""),
                     "tool_name": tu["tool_name"],
                     "tool_use_id": tu["tool_use_id"],
+                    "target_path": tu.get("target_path", ""),
                     "is_error": None,  # filled after the line walk
                 })
 
